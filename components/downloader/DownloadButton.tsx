@@ -12,8 +12,25 @@ function buildDownloadUrl(videoUrl: string, title: string): string {
   return `/api/download?${params.toString()}`;
 }
 
+function filenameFromContentDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      // fall through to plain filename
+    }
+  }
+  const plainMatch = header.match(/filename="([^"]+)"/i);
+  return plainMatch ? plainMatch[1] : fallback;
+}
+
 export default function DownloadButton({ video }: DownloadButtonProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const selected = video.videoCandidates[selectedIndex] ?? video.videoCandidates[0];
 
   const downloadUrl = useMemo(
@@ -23,12 +40,55 @@ export default function DownloadButton({ video }: DownloadButtonProps) {
 
   const hasMultipleQualities = video.videoCandidates.length > 1;
 
+  async function handleDownload() {
+    setIsDownloading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(downloadUrl);
+
+      if (!res.ok) {
+        let message = "Không tải được video. Vui lòng thử lại.";
+        try {
+          const body = await res.json();
+          if (typeof body?.error === "string") message = body.error;
+        } catch {
+          // response wasn't JSON - keep the generic message
+        }
+        setError(message);
+        return;
+      }
+
+      const blob = await res.blob();
+      const filename = filenameFromContentDisposition(
+        res.headers.get("content-disposition"),
+        "douyin-video.mp4"
+      );
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
     <div className="flex w-full flex-col gap-2">
       {hasMultipleQualities && (
         <select
           value={selectedIndex}
-          onChange={(e) => setSelectedIndex(Number(e.target.value))}
+          onChange={(e) => {
+            setSelectedIndex(Number(e.target.value));
+            setError(null);
+          }}
           className="w-full rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-xs text-neutral-700 outline-none dark:border-white/15 dark:bg-white/5 dark:text-neutral-200"
         >
           {video.videoCandidates.map((candidate, index) => (
@@ -38,13 +98,21 @@ export default function DownloadButton({ video }: DownloadButtonProps) {
           ))}
         </select>
       )}
-      <a
-        href={downloadUrl}
-        download
-        className="flex w-full items-center justify-center rounded-xl bg-neutral-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={isDownloading}
+        className="flex w-full items-center justify-center rounded-xl bg-neutral-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
       >
-        Download Video
-      </a>
+        {isDownloading ? "Đang tải..." : "Download Video"}
+      </button>
+
+      {error && (
+        <p className="text-center text-xs text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
