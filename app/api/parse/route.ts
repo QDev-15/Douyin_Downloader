@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DouyinShareParser } from "@/lib/douyin/parser";
+import { ApifyDouyinParser } from "@/lib/douyin/providers/apify";
 import { DouyinParseError, DouyinParseErrorCode } from "@/lib/douyin/types";
 import { ParseResponse } from "@/types/video";
 
 export const runtime = "nodejs";
 
-const parser = new DouyinShareParser();
+const parser = new ApifyDouyinParser();
 
 const STATUS_BY_CODE: Record<DouyinParseErrorCode, number> = {
   INVALID_URL: 400,

@@ -12,6 +12,7 @@ const ALLOWED_CDN_HOST_SUFFIXES = [
   "bytetos.com",
   "bytecdn.com",
   "pstatp.com",
+  "douyinstatic.com",
 ];
 
 export function isAllowedCdnUrl(input: string): boolean {
